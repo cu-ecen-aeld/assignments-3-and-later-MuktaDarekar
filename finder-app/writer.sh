@@ -37,16 +37,17 @@ then
 # Check if file got updated
 else 
 	# Number of lines matching with given string in those files
-	y=$(grep -r "$writestr" "$writefile" * | wc -l)
+	y=$(grep "$writestr" "$writefile" | wc -l)
 
-	if [ $y -eq 1 ]
+	# Verify whether file got updated with given string
+	if [ $y -ne 1 ]
 	then
-		echo "File written successfully"
-		exit 0
-	else
 		echo "ERROR: File didn't get updated"
 		exit 1
 	fi
+	
+	echo "The string '${writestr}' is successfully written in file '${writefile}'"
+	exit 0
 fi
 
 

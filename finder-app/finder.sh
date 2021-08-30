@@ -25,11 +25,12 @@ then
 
 # Get number of files and matching lines
 else 
-	# Number of files present in given directory
-	x=$(find "$filesdir" -type f | wc -l)
+	# Number of files present in given directory that matches string
+	#x=$(find "$filesdir" -type f | wc -l)
+	x=$(grep -rl "$searchstr" "$filesdir" | wc -l)
 
 	# Number of lines matching with given string in those files
-	y=$(grep -r "$searchstr" "$filesdir" * | wc -l)
+	y=$(grep -r "$searchstr" "$filesdir" | wc -l)
 
 	str1="The number of files are "
 	str2=" and the number of matching lines are "
@@ -39,4 +40,4 @@ else
 	exit 0
 fi
 
-
+#end
