@@ -16,41 +16,65 @@
 #include <syslog.h>
 #include <unistd.h>
 
+// Macro directives
 #define TOTAL_ARG	3	//including ./writer + filename + string = 3 arguments
+#define ERROR		1
+#define SUCCESS	0
 
+//Function:	int main(int argc, char *argv[])
+//Inputs:	argc - number of arguments, argv[] - arguments fed
+//Return:	write operation status 0-success, 1-error
+//Brief:	writes given string in given file
 
 int main(int argc, char *argv[])
 {
-
 	openlog(NULL, LOG_CONS, LOG_USER);
+	int ret = SUCCESS;
 	
-	// verify arguments
-	if(argc != 3)
+	// verify arguments 
+	if(argc != TOTAL_ARG)
 	{
 		syslog(LOG_ERR, "Invalid number of arguments, need Filepath>Filename and string to write\n");
-		 return 1;
-	}
-			
-	int fd = open(argv[1], O_CREAT | O_RDWR | O_TRUNC, 0664);
-	if (fd == -1)
-	{
-		syslog(LOG_ERR, "can't open or create file %s\n", argv[1]);
-		return 1;
+		ret = ERROR;
 	}
 	
-	ssize_t nr = write(fd, argv[2], strlen(argv[2]));
-	if (nr == -1)
+	//execute only if no error
+	if(ret == SUCCESS)
 	{
-		syslog(LOG_ERR, "can't write string '%s' in file '%s'\n", argv[2], argv[1]);
-		return 1;		
-	}
-	else if (nr == strlen(argv[2]))
-	{
-		syslog(LOG_DEBUG, "Writing %s to file %s\n", argv[2], argv[1]);
+		//Take argument with filename and path in one variable
+		const char *filepath=argv[1];
+		
+		//Take argument with string to be written in one variable
+		const char *writestr=argv[2];
+			
+		//Open given file, if doesn't exists then create	
+		int fd = open(filepath, O_CREAT | O_RDWR | O_TRUNC, 0664);
+		if (fd == -1)	
+		{//if error
+			syslog(LOG_ERR, "can't open or create file %s\n", filepath);
+			ret = ERROR;
+		}
+		
+		//execute only if no error
+		if(ret == SUCCESS)
+		{
+			//Write given/created file with given string
+			ssize_t nr = write(fd, writestr, strlen(writestr));
+			if (nr == -1)	
+			{//if error
+				syslog(LOG_ERR, "can't write string '%s' in file '%s'\n", writestr, filepath);
+				ret = ERROR;		
+			}
+			else if (nr == strlen(writestr))
+			{//if no.of bytes written equals to string len then write successful
+				syslog(LOG_DEBUG, "Writing %s to file %s\n", writestr, filepath);
+				ret = SUCCESS;
+			}
+		}
 	}
 	
 	closelog();
-	return 0;
+	return ret;
 }
 
 
