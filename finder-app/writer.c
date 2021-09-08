@@ -51,13 +51,15 @@ int main(int argc, char *argv[])
 		int fd = open(filepath, O_CREAT | O_RDWR | O_TRUNC, 0664);
 		if (fd == -1)	
 		{//if error
-			syslog(LOG_ERR, "can't open or create file %s\n", filepath);
+			syslog(LOG_ERR, "can't open or create file '%s'\n", filepath);
 			ret = ERROR;
 		}
 		
 		//execute only if no error
 		if(ret == SUCCESS)
 		{
+			syslog(LOG_DEBUG, "File '%s' opened/created successfully\n", filepath);
+				
 			//Write given/created file with given string
 			ssize_t nr = write(fd, writestr, strlen(writestr));
 			if (nr == -1)	
@@ -67,8 +69,12 @@ int main(int argc, char *argv[])
 			}
 			else if (nr == strlen(writestr))
 			{//if no.of bytes written equals to string len then write successful
-				syslog(LOG_DEBUG, "Writing %s to file %s\n", writestr, filepath);
+				syslog(LOG_DEBUG, "Writing '%s' to file '%s'\n", writestr, filepath);
 				ret = SUCCESS;
+			}
+			if (close(fd) == 0)
+			{			
+				syslog(LOG_DEBUG, "File '%s' closed successfully\n", filepath);
 			}
 		}
 	}
