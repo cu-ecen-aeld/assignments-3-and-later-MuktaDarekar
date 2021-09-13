@@ -35,7 +35,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     echo "Checking out version ${KERNEL_VERSION}"
     git checkout ${KERNEL_VERSION}
     
-source ~/.bashrc
+#source ~/.bashrc
 
     # Adding kernel build steps
     
