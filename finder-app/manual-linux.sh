@@ -12,7 +12,6 @@ BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
-SYSROOT=/home/mukta/Downloads/install-lnx-10-2/gcc-arm-10.2-2020.11-x86_64-aarch64-none-linux-gnu/aarch64-none-linux-gnu/libc
 
 if [ $# -lt 1 ]
 then
@@ -91,11 +90,13 @@ echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
+SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
+
 # Adding library dependencies to rootfs
-cp -L ${SYSROOT}/lib/ld-linux-aarch64.* lib
-cp -L ${SYSROOT}/lib64/libm.so.* lib64
-cp -L ${SYSROOT}/lib64/libresolv.so.* lib64
-cp -L ${SYSROOT}/lib64/libc.so.* lib64
+cp -L $SYSROOT/lib/ld-linux-aarch64.so.* lib
+cp -L $SYSROOT/lib64/libm.so.* lib64
+cp -L $SYSROOT/lib64/libresolv.so.* lib64
+cp -L $SYSROOT/lib64/libc.so.* lib64
 
 
 # Make device nodes
