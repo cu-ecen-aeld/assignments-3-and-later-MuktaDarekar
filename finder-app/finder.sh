@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Tester script for assignment 1 point 9)
 # Author: Mukta Darekar
 
