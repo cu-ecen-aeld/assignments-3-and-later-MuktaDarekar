@@ -21,7 +21,75 @@ bool do_system(const char *cmd)
 	if(ret == -1)
 		return false;
 	else
-    	return true;
+	{
+		if (WIFEXITED (ret))
+		{
+			if (WEXITSTATUS (ret) != 0)
+			return false;
+		}
+		return true;
+	}
+}
+
+/*
+*/
+bool do_exec_redirect_file(char **cmd, const char *outfile)
+{
+	int status;
+	pid_t pid;
+	int fd;
+
+	if (outfile != NULL)
+	{
+		fd = open(outfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+		if (fd < 0) 
+		{ 
+			perror("open"); 
+			abort(); 
+			return false;
+		}
+	}
+
+	pid = fork();
+
+	if (pid == -1)
+	{
+		return false;
+	}	
+	else if (pid == 0) 
+	{
+		if (outfile != NULL)
+		{
+			if (dup2(fd, STDOUT_FILENO) < 0) 
+			{ 
+				perror("dup2"); 
+				return false; 
+			}
+			close(fd);
+		}	
+
+		execv(cmd[0], cmd);
+		perror("execv");
+		exit (-1);
+		return false; 
+	}
+	else if (pid > 0)
+	{
+		if (outfile != NULL)
+		{
+			close(fd);
+		}
+
+		if (waitpid (pid, &status, 0) == -1)
+			return false;
+
+		else if (WIFEXITED (status))
+		{
+			if (WEXITSTATUS (status) != 0)
+				return false;
+		}
+	}
+	return true;
 }
 
 /**
@@ -62,34 +130,15 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *   
 */
+	bool ret = false;
 
-	int status;
-	pid_t pid;
-	pid = fork();
-	
-	if (pid == -1)
-		return false;
-	
-	else if (pid == 0) 
+	if (count > 0)
 	{
-		execv(command[0], command);
-		exit(-1);
+		ret = do_exec_redirect_file(command, NULL);
 	}
-	
-	else if (pid > 0)
-	{
-		if (waitpid (pid, &status, 0) == -1)
-			return false;
-			
-		else if (WIFEXITED (status))
-		{
-			if (WEXITSTATUS (status) != 0)
-			return false;
-		}
-	}
-	
+
 	va_end(args);
-    return true;
+	return ret;
 }
 
 /**
@@ -120,57 +169,16 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *   
 */
+	bool ret = false;
 
-	
-	int status;
-	pid_t pid;
-	int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
-	
-	if (fd < 0) 
-	{ 
-		perror("open"); 
-		abort(); 
-	}
-	
-	pid = fork();
-	
-	if (pid == -1)
+	if (count > 0)
 	{
-    	va_end(args);
-		return false;
+		ret = do_exec_redirect_file(command, outputfile);
 	}
-		
-	else if (pid == 0) 
-	{
-		if (dup2(fd, STDOUT_FILENO) < 0) 
-		{ 
-			perror("dup2"); 
-			return false; 
-		}
-    	close(fd);
-    	va_end(args);
-		
-		execv(command[0], command);
-		exit (-1);
-	}
-	
-	else if (pid > 0)
-	{
-		close(fd);
-    	va_end(args);
-		
-		if (waitpid (pid, &status, 0) == -1)
-			return false;
-			
-		else if (WIFEXITED (status))
-		{
-			if (WEXITSTATUS (status) != 0)
-			return false;
-		}
-	}
-	
-    
-    return true;
+
+	va_end(args);
+
+	return ret;
 }
 
 
