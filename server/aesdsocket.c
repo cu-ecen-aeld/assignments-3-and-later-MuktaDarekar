@@ -98,6 +98,8 @@ int main(int argc, char *argv[])
 	// check if deamon needs to be started
     if ((argc == 2) && (strcmp("-d", argv[1])==0)) 
 		deamon = 1;
+		
+	syslog(LOG_INFO, "aesdsocket code started\n");
 
 	// Set signal handler for SIGINT
 	if(signal(SIGINT, signal_handler) == SIG_ERR)
@@ -131,43 +133,28 @@ int main(int argc, char *argv[])
         syslog(LOG_ERR, "Adding SIGTERM failed");
         exit(EXIT_FAILURE);
     }
+	syslog(LOG_INFO, "signal handler set\n");
 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	sockfd = socket(PF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1)
 	{
 		syslog(LOG_ERR, "socket creation failed\n");
 		exit(EXIT_FAILURE);
 	}
+	syslog(LOG_INFO, "socket created\n");
 
-	saddr.sin_family = AF_INET;
+	saddr.sin_family = PF_INET;
 	saddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	saddr.sin_port = htons(MYPORT);
 
-	int ret = bind(sockfd, (struct sockaddr *) &saddr, sizeof saddr);
+	int ret = bind(sockfd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_in));
 	if (ret == -1)
 	{
 		syslog(LOG_ERR, "socket binding failed\n");
 		closeall();
 		exit(EXIT_FAILURE);
 	}
-	
-	ret = listen(sockfd, 0);
-	if (ret == -1)
-	{
-		syslog(LOG_ERR, "socket listening failed\n");
-		closeall();
-		exit(EXIT_FAILURE);
-	}
-	socklen_t len = sizeof(struct sockaddr);
-
-	fd = open(filepath, O_CREAT | O_RDWR | O_APPEND | O_TRUNC, 0764);
-	if (fd == -1)	
-	{//if error
-		syslog(LOG_ERR, "can't open or create file '%s'\n", filepath);
-		closeall();
-		exit(EXIT_FAILURE);
-	}
-	syslog(LOG_DEBUG, "opened or created file '%s' successfully\n", filepath);
+	syslog(LOG_INFO, "bind successful\n");
 
 	// start deamon
 	if (deamon) 
@@ -184,6 +171,8 @@ int main(int argc, char *argv[])
             exit(EXIT_SUCCESS);
         }
 
+		syslog(LOG_INFO, "fork successful\n");
+	
         pid_t sid = setsid();		
 		if (sid == -1) 
 		{
@@ -191,6 +180,8 @@ int main(int argc, char *argv[])
 			closeall();
 			exit(EXIT_FAILURE);
 		}
+		
+		syslog(LOG_INFO, "SID: %d\n", sid);
 
 		if (chdir("/") == -1) 
 		{
@@ -198,16 +189,38 @@ int main(int argc, char *argv[])
 			closeall();
 			exit(EXIT_FAILURE);
 		}
+		syslog(LOG_INFO, "chdir successful\n");
 
-		open("/dev/null", O_RDWR);
-		dup(STDIN_FILENO);
-		dup(STDOUT_FILENO);
-		dup(STDERR_FILENO);
+		//open("/dev/null", O_RDWR);
+		//dup(STDIN_FILENO);
+		//dup(STDOUT_FILENO);
+		//dup(STDERR_FILENO);
 
 		close(STDIN_FILENO);
 		close(STDOUT_FILENO);
 		close(STDERR_FILENO);
     }
+	syslog(LOG_INFO, "daemon created\n");
+	
+	ret = listen(sockfd, 10);
+	if (ret == -1)
+	{
+		syslog(LOG_ERR, "socket listening failed\n");
+		closeall();
+		exit(EXIT_FAILURE);
+	}
+	syslog(LOG_INFO, "listening\n");
+	
+	socklen_t len = sizeof(struct sockaddr);
+
+	fd = open(filepath, O_CREAT | O_RDWR | O_APPEND | O_TRUNC, 0764);
+	if (fd == -1)	
+	{//if error
+		syslog(LOG_ERR, "can't open or create file '%s'\n", filepath);
+		closeall();
+		exit(EXIT_FAILURE);
+	}
+	syslog(LOG_DEBUG, "opened or created file '%s' successfully\n", filepath);
 	
 	while(1)
 	{
@@ -265,7 +278,7 @@ int main(int argc, char *argv[])
 		if (sendbuffer == NULL)
 			syslog(LOG_ERR, "malloc failed\n");
 		
-		memset(sendbuffer, 0, sizeof(sendbuffer));
+		memset(sendbuffer, 0, total_bytes+location);
 		nr = read(fd, sendbuffer, total_bytes+location);
 		if (nr != total_bytes+location)	
 		{//if error
