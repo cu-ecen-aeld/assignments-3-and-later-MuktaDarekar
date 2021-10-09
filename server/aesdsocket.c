@@ -1,5 +1,5 @@
 // Tester code for assignment 5 part 1
-// File:	writer.c
+// File:	aesdsocket.c
 // Author:	Mukta Darekar
 // Reference: https://docs.oracle.com/cd/E19620-01/805-4041/sockets-47146/index.html
 
@@ -28,37 +28,9 @@
 #define MYPORT		9000
 #define DEF_FILEPATH	"/var/tmp/aesdsocketdata"
 
+// Signal received flag
+bool exit_on_signal = false;
 int sockfd = 0;
-char *sendbuffer = NULL;
-int acceptedfd = 0;
-int fd = 0;
-sigset_t mask;
-
-//filename and path in one variable
-const char *filepath = DEF_FILEPATH;
-
-//Function:	static void signal_handler(int signo)
-//Inputs:	signo - Signal number
-
-static void closeall(void)
-{
-	if(sendbuffer != NULL)	
-		free(sendbuffer);
-
-	if(acceptedfd)
-		close(acceptedfd);
-
-	if(sockfd)
-		close(sockfd);
-
-	if(fd)	
-	{
-		close(fd);
-		remove(filepath);
-	}
-	
-	closelog();	
-}
 
 //Function:	static void signal_handler(int signo)
 //Inputs:	signo - Signal number
@@ -72,10 +44,10 @@ static void signal_handler(int signo)
 		syslog(LOG_DEBUG, "Caught signal SIGINT, exiting\n");
 	else
 		syslog(LOG_DEBUG, "Caught signal SIGTERM, exiting\n");
+		
+	shutdown(sockfd, SHUT_RDWR);
 
-	closeall();
-
-	exit(EXIT_SUCCESS);
+	exit_on_signal = true;
 	
 }
 
@@ -91,9 +63,18 @@ int main(int argc, char *argv[])
 	char buffer[50] = {0};
 	int nbytes = 0;
 	ssize_t nr = 0;
-	unsigned int total_bytes = 0;
+	int total_bytes = 0;
 	off_t location =0;
 	int deamon=0;
+	char *sendbuffer = NULL;
+	int acceptedfd = 0;
+	int fd = 0;
+	sigset_t mask;
+	bool exit_on_error = false;
+	int opt=1;
+
+	//filename and path in one variable
+	const char *filepath = DEF_FILEPATH;
 
 	// check if deamon needs to be started
     if ((argc == 2) && (strcmp("-d", argv[1])==0)) 
@@ -105,54 +86,70 @@ int main(int argc, char *argv[])
 	if(signal(SIGINT, signal_handler) == SIG_ERR)
 	{
 		syslog(LOG_ERR, "Cannot handle SIGINT!\n");
-		exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
 	}
 
 	// Set signal handler for SIGTERM
 	if(signal(SIGTERM, signal_handler) == SIG_ERR)
 	{
 		syslog(LOG_ERR, "Cannot handle SIGTERM!\n");
-		exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
 	}
 
 	//Create signal set
     if (sigemptyset(&mask) == -1) 
 	{
         syslog(LOG_ERR, "creating empty signal set failed");
-        exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
     }
 	//Add signal SIGINT into created empty set
     if (sigaddset(&mask, SIGINT) == -1) 
 	{
         syslog(LOG_ERR, "Adding SIGINT failed");
-        exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
     }
 	//Add signal SIGTERM into created empty set
     if (sigaddset(&mask, SIGTERM) == -1) 
 	{
         syslog(LOG_ERR, "Adding SIGTERM failed");
-        exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
     }
 	syslog(LOG_INFO, "signal handler set\n");
 
+	//create socket
 	sockfd = socket(PF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1)
 	{
 		syslog(LOG_ERR, "socket creation failed\n");
-		exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
 	}
 	syslog(LOG_INFO, "socket created\n");
-
+	
+	//reuse socket
+	if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
+	{
+		syslog(LOG_ERR, "setsocketopt failed\n");
+		//exit_on_error = true;
+		//goto EXITING;
+	}
+	syslog(LOG_INFO, "socket created\n");
 	saddr.sin_family = PF_INET;
 	saddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	saddr.sin_port = htons(MYPORT);
 
+	//bind socket at port number 9000
 	int ret = bind(sockfd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_in));
 	if (ret == -1)
 	{
 		syslog(LOG_ERR, "socket binding failed\n");
-		closeall();
-		exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
 	}
 	syslog(LOG_INFO, "bind successful\n");
 
@@ -163,7 +160,6 @@ int main(int argc, char *argv[])
         if (pid == -1) 
 		{
             syslog(LOG_ERR, "failed to fork");
-			closeall();
             exit(EXIT_FAILURE);
         }
         else if (pid > 0)
@@ -177,7 +173,6 @@ int main(int argc, char *argv[])
 		if (sid == -1) 
 		{
 			syslog(LOG_ERR, "failed to setsid");
-			closeall();
 			exit(EXIT_FAILURE);
 		}
 		
@@ -186,52 +181,53 @@ int main(int argc, char *argv[])
 		if (chdir("/") == -1) 
 		{
 			syslog(LOG_ERR, "failed to change dir");
-			closeall();
 			exit(EXIT_FAILURE);
 		}
 		syslog(LOG_INFO, "chdir successful\n");
 
-		//open("/dev/null", O_RDWR);
-		//dup(STDIN_FILENO);
-		//dup(STDOUT_FILENO);
-		//dup(STDERR_FILENO);
-
 		close(STDIN_FILENO);
 		close(STDOUT_FILENO);
 		close(STDERR_FILENO);
+		syslog(LOG_INFO, "daemon created\n");
     }
-	syslog(LOG_INFO, "daemon created\n");
 	
+	//start listening at port 9000
 	ret = listen(sockfd, 10);
 	if (ret == -1)
 	{
 		syslog(LOG_ERR, "socket listening failed\n");
-		closeall();
-		exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
 	}
 	syslog(LOG_INFO, "listening\n");
 	
 	socklen_t len = sizeof(struct sockaddr);
 
+	//create or open file to store received packets
 	fd = open(filepath, O_CREAT | O_RDWR | O_APPEND | O_TRUNC, 0764);
 	if (fd == -1)	
 	{//if error
 		syslog(LOG_ERR, "can't open or create file '%s'\n", filepath);
-		closeall();
-		exit(EXIT_FAILURE);
+		exit_on_error = true;
+		goto EXITING;
 	}
 	syslog(LOG_DEBUG, "opened or created file '%s' successfully\n", filepath);
 	
+	//Enter into loop for accepting each packet
 	while(1)
 	{
+		//if signal is received or error is caused just break loop and close all and exit
+		if(exit_on_signal || exit_on_error)
+			break;
+			
+		//accept connection
 		acceptedfd = accept(sockfd, (struct sockaddr *) &saddr, &len);
 		if (acceptedfd == -1)
 		{
 			syslog(LOG_ERR, "socket accepting failed\n");
-			closeall();
-			exit(EXIT_FAILURE);
+			exit_on_error = true;
+			goto EXITING;
 		}
-
 		syslog(LOG_DEBUG, "Accepted connection from '%s'\n", inet_ntoa((struct in_addr)saddr.sin_addr));
 	
 
@@ -239,8 +235,8 @@ int main(int argc, char *argv[])
         if (sigprocmask(SIG_BLOCK, &mask, NULL)) 
 		{
             syslog(LOG_ERR, "sigprocmask");
-			closeall();
-            exit(EXIT_FAILURE);
+			exit_on_error = true;
+			goto EXITING;
         }
 
 		do
@@ -263,7 +259,7 @@ int main(int argc, char *argv[])
 					syslog(LOG_ERR, "can't write received string in file '%s'\n", filepath);
 					break;	
 				}
-				total_bytes += nr;
+				total_bytes = total_bytes + (int)nr;
 			}
 			else
 				break;
@@ -274,28 +270,60 @@ int main(int argc, char *argv[])
 		nbytes=0;
 		lseek(fd, 0, SEEK_SET);
 		
-		sendbuffer = (char *)malloc(sizeof(char) * (total_bytes+location));
-		if (sendbuffer == NULL)
-			syslog(LOG_ERR, "malloc failed\n");
+		total_bytes += (location+1);		
+
+		do
+		{
+			memset(buffer, 0, sizeof(buffer));
+			
+			nr = read(fd, buffer, sizeof(buffer));
+			
+			if (nr)
+			{
+				//syslog(LOG_DEBUG, "tbytes - %d\n", total_bytes);
+				//syslog(LOG_DEBUG, "nbytes - %ld\n", nr);
+				//syslog(LOG_DEBUG, "'%s'\n", buffer);
+				if(nr == strlen(buffer))
+					nbytes = send(acceptedfd, buffer, strlen(buffer), 0);
+				else
+					nbytes = send(acceptedfd, buffer, nr, 0);
+					
+				//syslog(LOG_DEBUG, "nbytes - %d\n", nbytes);
+				if (nbytes != nr)	
+				{//if error
+					syslog(LOG_ERR, "not all bytes sent\n");
+					break;	
+				}
+				total_bytes = total_bytes - (int)nr;
+			}
+			else
+				break;
+
+		}while((total_bytes>0));
 		
-		memset(sendbuffer, 0, total_bytes+location);
-		nr = read(fd, sendbuffer, total_bytes+location);
-		if (nr != total_bytes+location)	
-		{//if error
-			syslog(LOG_ERR, "can't read proper bytes from file '%s'\n", filepath);
-			break;	
-		}
+		
+		//sendbuffer = (char *)malloc(sizeof(char) * (total_bytes+location));
+		//if (sendbuffer == NULL)
+		//	syslog(LOG_ERR, "malloc failed\n");
+		
+		//memset(sendbuffer, 0, total_bytes+location);
+		//nr = read(fd, sendbuffer, total_bytes+location);
+		//if (nr != total_bytes+location)	
+		//{//if error
+		//	syslog(LOG_ERR, "can't read proper bytes from file '%s'\n", filepath);
+		//	break;	
+		//}
 		
 		//syslog(LOG_DEBUG, "'%s'\n", sendbuffer);
-		nbytes = send(acceptedfd, sendbuffer, nr, 0);
-		if(nbytes != nr)
-		{
-			syslog(LOG_ERR, "not all bytes sent\n");
-			break;
-		}
+		//nbytes = send(acceptedfd, sendbuffer, nr, 0);
+		//if(nbytes != nr)
+		//{
+		//	syslog(LOG_ERR, "not all bytes sent\n");
+		//	break;
+		//}
 		//syslog(LOG_DEBUG, "nbytes - %d\n", nbytes);
 		//total_bytes -= nbytes;
-		total_bytes = 0;
+		//total_bytes = 0;
 		
 		location=lseek(fd, 0, SEEK_END);
 
@@ -306,20 +334,42 @@ int main(int argc, char *argv[])
         if (sigprocmask(SIG_UNBLOCK, &mask, NULL)) 
 		{
             syslog(LOG_ERR, "sigprocmask");
-			closeall();
-            exit(EXIT_FAILURE);
+			exit_on_error = true;
+			goto EXITING;
         }
 	
 		free(sendbuffer);
 		close(acceptedfd);
 	}
 
-	remove(filepath);
-	close(sockfd);
-	close(fd);
+EXITING:
+
+	if (exit_on_error)
+		syslog(LOG_DEBUG, "exiting on failure\n");
+	else
+		syslog(LOG_DEBUG, "exiting on sucess\n");
+		
+	//if(sendbuffer != NULL)	
+		//free(sendbuffer);
+
+	if(acceptedfd)
+		close(acceptedfd);
+
+	if(sockfd)
+		close(sockfd);
+
+	if(fd)	
+	{
+		close(fd);
+		remove(filepath);
+	}
 	
 	closelog();
-	return 0;
+	
+	if (exit_on_error)
+		return 1;
+	else
+		return 0;
 }
 
 
