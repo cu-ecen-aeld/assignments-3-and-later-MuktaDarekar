@@ -1,7 +1,3 @@
-SRC := aesdsocket.c
-TARGET = aesdsocket
-OBJS := $(SRC:.c=.o)
-
 ifeq ($(CC),)
 	CC = $(CROSS_COMPILE)gcc
 endif
@@ -15,6 +11,8 @@ ifeq ($(LDFLAGS),)
 endif
 
 all: aesdsocket.o aesdsocket
+
+default: aesdsocket.o aesdsocket
 
 aesdsocket.o : aesdsocket.c
 	$(CC) $(CFLAGS) -c -o aesdsocket.o aesdsocket.c $(INCLUDES)
