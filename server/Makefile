@@ -18,7 +18,7 @@ aesdsocket.o : aesdsocket.c
 	$(CC) $(CFLAGS) -c -o aesdsocket.o aesdsocket.c $(INCLUDES)
 
 aesdsocket : aesdsocket.o
-	$(CC) $(CFLAGS) -I/ aesdsocket.o -o aesdsocket $(INCLUDES) $(LDFLAGS)
+	$(CC) $(CFLAGS) aesdsocket.o -o aesdsocket $(INCLUDES) $(LDFLAGS)
 
 clean:
 	-rm -f *.o $(TARGET) *.elf *.map

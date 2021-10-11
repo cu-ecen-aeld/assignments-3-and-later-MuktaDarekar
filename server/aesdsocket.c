@@ -106,7 +106,7 @@ static void timer_thread(union sigval sigval)
 		td->timer_thread_success = false;
 	}
 	
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
 }
 
 //Function:	static void signal_handler(int signo)
@@ -129,7 +129,7 @@ static void signal_handler(int signo)
 	
 }
 
-void packetRWthread(void* thread_param)
+void* packetRWthread(void* thread_param)
 {
     thread_data *thread_func_args = (thread_data*)thread_param;
 	bool status = true;
@@ -318,7 +318,8 @@ void packetRWthread(void* thread_param)
     free(buffer);
     free(rebuffer);
     
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
+	return NULL;
 }
 
 
@@ -537,7 +538,7 @@ int main(int argc, char* argv[])
 		datap->params.sin_addr = saddr.sin_addr;
 		datap->params.fd=fd;
 
-		pthread_create(&(datap->params.thread), NULL, (void*)&packetRWthread, (void*)&(datap->params));
+		pthread_create(&(datap->params.thread), NULL, &packetRWthread, (void*)&(datap->params));
 
 		SLIST_FOREACH(datap,&head,entries)
 		{
@@ -599,5 +600,7 @@ EXITING:
 		return 1;
 	else
 		return 0;
-		
 }
+
+
+
