@@ -1,6 +1,6 @@
-#OOPS message generated:
+# OOPS message generated:
 
-'''
+```
 # echo “hello_world” > /dev/faulty
 Unable to handle kernel NULL pointer dereference at virtual address 0000000000000000
 Mem abort info:
@@ -47,14 +47,14 @@ Call trace:
  el0_sync+0x174/0x180
 Code: d2800001 d2800000 d503233f d50323bf (b900003f) 
 ---[ end trace 9d894bf17ff4deb4 ]---
-'''
+```
 
-##Description on above oops message:
+## Description on above oops message:
 
 
-#objdump of faulty.ko file:
+# objdump of faulty.ko file:
 
-'''
+```
 buildroot/output/build/ldd-3a239d83c92161f3df637a3201e20f08ea61c04d/misc-modules/faulty.ko:     file format elf64-littleaarch64
 
 
@@ -196,7 +196,7 @@ Disassembly of section .text.ftrace_trampoline:
 
 0000000000000302 <.text.ftrace_trampoline>:
 	...
-'''
+```
 
-##Description of above objdump:	
+## Description of above objdump:	
 	
