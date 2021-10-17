@@ -36,35 +36,36 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     uint8_t temp_out_offs = buffer->out_offs;
     size_t size = buffer->entry[temp_out_offs].size;
     size_t prev_size = 0;
+
     //buffer empty check
     if((buffer->full == false) && (buffer->in_offs == buffer->out_offs))
-    	return NULL;
-    	
+        return NULL;
+
     //get aesd_buffer_entry pointer as per char_offset
     while(1)
     {
-    	//if char_offset is greater than size of current entry then move to next one
-    	if(char_offset >= size)
-    	{	
-    		prev_size = size;
-    		
-    		temp_out_offs++;
-    		if(temp_out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
-    			temp_out_offs = 0;
-    			
-    		size = size + buffer->entry[temp_out_offs].size;
-    	}
-    	//Get a pointer specifying a location as per char_offset
-    	else
-    	{
-    		*entry_offset_byte_rtn = char_offset - prev_size;
-    		return (&(buffer->entry[temp_out_offs]));	
-    	}
-    	//stop looking if reference pointer reaches to in offset of buffer
-    	if(temp_out_offs == buffer->in_offs)
-    		break;
+        //if char_offset is greater than size of current entry then move to next one
+        if(char_offset >= size)
+        {	
+            prev_size = size;
+
+            temp_out_offs++;
+            if(temp_out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+                temp_out_offs = 0;
+
+            size = size + buffer->entry[temp_out_offs].size;
+        }
+        //Get a pointer specifying a location as per char_offset
+        else
+        {
+            *entry_offset_byte_rtn = char_offset - prev_size;
+            return (&(buffer->entry[temp_out_offs]));	
+        }
+        //stop looking if reference pointer reaches to in offset of buffer
+        if(temp_out_offs == buffer->in_offs)
+            break;
     }
-    
+
     return NULL;
 }
 
@@ -82,25 +83,25 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     */
     //Load new entry at in offset
     buffer->entry[buffer->in_offs] = *add_entry;
-    
+
     //check in offset limit
     buffer->in_offs++;
     if(buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
-    	buffer->in_offs = 0;
-    	
+        buffer->in_offs = 0;
+
     //check for buffer full and out offset limit
     if(buffer->full)
     {
-		buffer->out_offs++;
-		if(buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
-			buffer->out_offs = 0;
+        buffer->out_offs++;
+        if(buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+            buffer->out_offs = 0;
     }
     else
     {
-    	if(buffer->out_offs == buffer->in_offs)
-    		buffer->full = true;
-    	else
-    		buffer->full = false;
+        if(buffer->out_offs == buffer->in_offs)
+            buffer->full = true;
+        else
+            buffer->full = false;
     }
 }
 
