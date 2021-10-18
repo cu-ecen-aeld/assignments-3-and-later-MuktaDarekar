@@ -50,10 +50,10 @@ Code: d2800001 d2800000 d503233f d50323bf (b900003f)
 ```
 
 ## Description on above oops message:
-<br>Error: as shown in line 1 - Unable to handle kernel NULL pointer dereference at virtual address 0000000000000000
-<br>       This means pointer referencing inaccessible address
-<br>Line: Internal error: Oops: 96000045 [#1] SMP - means pointer deference error as mentioned above
-<br>Location:  *pc : faulty_write+0x14/0x20 [faulty]* - this line indicates that error occurred during faulty_write operation at 0x14 Program counter address
+**Error:** as shown in line 1 - Unable to handle kernel NULL pointer dereference at virtual address 0000000000000000
+<br>    - This means pointer referencing inaccessible address
+<br>**Line:** *Internal error: Oops: 96000045 [#1] SMP* - means pointer deference error as mentioned above
+<br>**Location:**  *pc : faulty_write+0x14/0x20 [faulty]* - this line indicates that error occurred during faulty_write operation at 0x14 Program counter address
 
 
 # objdump of faulty.ko file:
@@ -203,8 +203,8 @@ Disassembly of section .text.ftrace_trampoline:
 ```
 
 ## Description of above objdump:
-<br>Section: Refer only faulty_write section in the start as oops message mentions that error lies there
-<br>Error Line:   *14:	b900003f 	str	wzr, [x1]* where x1 is  *4:	d2800001 	mov	x1, #0x0 *
-<br>            This means that x1 = 0 and its trying to write at this location
-<br>            As we can't access 0'th location for writing it is gave this error	
+**Section:** Refer only faulty_write section in the start as oops message mentions that error lies there
+<br>**Error Line:**   *14:	b900003f 	str	wzr, [x1]*  where x1 is  *4:	d2800001 	mov	x1, #0x0*
+<br>    - This means that x1 = 0 and its trying to write at this location
+<br>    - As we can't access 0'th location for writing it is gave this error	
 	
