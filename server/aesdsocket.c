@@ -30,8 +30,15 @@
 #define ERROR		1
 #define SUCCESS		0
 #define MYPORT		9000
-#define DEF_FILEPATH	"/var/tmp/aesdsocketdata"
 #define BUFFER_LEN	200
+
+#define USE_AESD_CHAR_DEVICE 1
+
+#ifdef USE_AESD_CHAR_DEVICE
+#define DEF_FILEPATH	"/dev/aesdchar"
+#else
+#define DEF_FILEPATH	"/var/tmp/aesdsocketdata"
+#endif
 
 typedef struct
 {
@@ -63,7 +70,7 @@ typedef struct
 	bool timer_thread_success;
 }timer_thread_data;
 
-
+#ifndef USE_AESD_CHAR_DEVICE
 // A thread which runs every 10sec of interval
 // Assumes timer_create has configured for sigval.sival_ptr to point to the
 // thread data used for the timer
@@ -106,6 +113,7 @@ static void timer_thread(union sigval sigval)
 
 //pthread_exit(NULL);
 }
+#endif
 
 //Function:	static void signal_handler(int signo)
 //Inputs:	signo - Signal number
@@ -136,6 +144,7 @@ void* packetRWthread(void* thread_param)
 	char *buffer = (char*)malloc(sizeof(char)*BUFFER_LEN);
 	int nbytes = 0;
 	ssize_t nr = 0;
+	//int fd = 0;
 
 	sigset_t mask;
 	//Create signal set
@@ -156,7 +165,14 @@ void* packetRWthread(void* thread_param)
 		syslog(LOG_ERR, "Adding SIGTERM failed");
 		status = false;
 	} 
-
+	
+	//create or open file to store received packets
+	thread_func_args->fd = open(DEF_FILEPATH, O_CREAT | O_RDWR | O_TRUNC, 0666);
+	if (thread_func_args->fd == -1)	
+	{//if error
+		syslog(LOG_ERR, "can't open or create file '%s'\n", DEF_FILEPATH);
+		status = false;
+	}
 
 	while(1)
 	{
@@ -218,8 +234,9 @@ void* packetRWthread(void* thread_param)
 		status = false;
 	}
 
-
+	#ifndef USE_AESD_CHAR_DEVICE
 	lseek(thread_func_args->fd, 0, SEEK_SET);
+	#endif
 
 	req_size = 0;
 	int ptr=0;
@@ -304,6 +321,7 @@ void* packetRWthread(void* thread_param)
 
 	syslog(LOG_DEBUG, "Closing connection from '%s'\n", inet_ntoa((struct in_addr)thread_func_args->sin_addr));
 	close(thread_func_args->acceptedfd);
+	close(thread_func_args->fd);
 
 	//status true
 	thread_func_args->thread_complete_success = status;
@@ -325,7 +343,7 @@ int main(int argc, char* argv[])
 	bool exit_on_error = false;
 	int opt=1;
 	int acceptedfd;
-	int fd; 
+	//int fd; 
 	socklen_t len;
 	int ret = 0;
 
@@ -433,8 +451,9 @@ int main(int argc, char* argv[])
 	}
 	syslog(LOG_INFO, "listening\n");
 
+/*
 	//create or open file to store received packets
-	fd = open(DEF_FILEPATH, O_CREAT | O_RDWR | O_APPEND | O_TRUNC, 0764);
+	fd = open(DEF_FILEPATH, O_CREAT | O_RDWR | O_APPEND | O_TRUNC, 0666);
 	if (fd == -1)	
 	{//if error
 		syslog(LOG_ERR, "can't open or create file '%s'\n", DEF_FILEPATH);
@@ -442,6 +461,8 @@ int main(int argc, char* argv[])
 		goto EXITING;
 	}
 
+*/
+#ifndef USE_AESD_CHAR_DEVICE
 	timer_t timerid;
 	struct sigevent *sev = malloc(sizeof(struct sigevent));
 	timer_thread_data td;
@@ -492,6 +513,7 @@ int main(int argc, char* argv[])
 			goto EXITING;
 		} 
 	}
+#endif	
 
 	while(exit_on_signal==0) 
 	{
@@ -527,7 +549,7 @@ int main(int argc, char* argv[])
 		datap->params.complete_status_flag = false;
 		datap->params.thread_complete_success = false;
 		datap->params.sin_addr = saddr.sin_addr;
-		datap->params.fd=fd;
+		//datap->params.fd=fd;
 
 		pthread_create(&(datap->params.thread), NULL, &packetRWthread, (void*)&(datap->params));
 
@@ -553,10 +575,10 @@ int main(int argc, char* argv[])
 	if(sockfd)
 		close(sockfd);
 
-	if(fd)	
+	//if(fd)	
 	{
-		close(fd);
-		remove(DEF_FILEPATH);
+		//close(fd);
+		//remove(DEF_FILEPATH);
 	}
 
 	SLIST_FOREACH(datap,&head,entries)
@@ -573,6 +595,7 @@ int main(int argc, char* argv[])
 		datap = NULL;
 	}
 
+#ifndef USE_AESD_CHAR_DEVICE
 	if(td.timer_thread_success == true)
 	{
 		syslog(LOG_DEBUG,"deleting timerid");
@@ -582,9 +605,11 @@ int main(int argc, char* argv[])
 			exit_on_error = true;
 		}
 	}
+	
+	free(sev);
+#endif
 
 	pthread_mutex_destroy(&rwmutex);
-	free(sev);
 	closelog();
 
 	if (exit_on_error && exit_on_signal==false)
