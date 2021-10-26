@@ -573,8 +573,6 @@ int main(int argc, char* argv[])
 		datap = NULL;
 	}
 
-	pthread_mutex_destroy(&rwmutex);
-
 	if(td.timer_thread_success == true)
 	{
 		syslog(LOG_DEBUG,"deleting timerid");
@@ -584,6 +582,8 @@ int main(int argc, char* argv[])
 			exit_on_error = true;
 		}
 	}
+
+	pthread_mutex_destroy(&rwmutex);
 	free(sev);
 	closelog();
 
