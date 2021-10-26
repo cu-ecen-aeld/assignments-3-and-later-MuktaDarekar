@@ -575,11 +575,14 @@ int main(int argc, char* argv[])
 	if(sockfd)
 		close(sockfd);
 
-	//if(fd)	
+
+#ifndef USE_AESD_CHAR_DEVICE
+	if(fd)	
 	{
-		//close(fd);
-		//remove(DEF_FILEPATH);
+		close(fd);
+		remove(DEF_FILEPATH);
 	}
+#endif
 
 	SLIST_FOREACH(datap,&head,entries)
 	{
