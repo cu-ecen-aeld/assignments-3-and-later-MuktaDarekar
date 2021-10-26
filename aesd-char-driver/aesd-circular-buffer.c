@@ -145,7 +145,7 @@ void aesd_circular_buffer_delete(struct aesd_circular_buffer *buffer)
 		if(entry == NULL)
 			continue;
 			
-		FREE(entry->buffptr);
+		FREE((void *)entry->buffptr);
 		/*
 		#ifdef __KERNEL__
 			kfree(entry->buffptr);
