@@ -17,9 +17,6 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
-#include <linux/uaccess.h> 
-#include <linux/string.h>
-#include <linux/slab.h> 
 #include "aesdchar.h"
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
@@ -31,11 +28,12 @@ struct aesd_dev aesd_device;
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
-	struct aesd_dev *dev;
 	PDEBUG("open");
 	/**
 	 * TODO: handle open
 	 */
+	 
+	struct aesd_dev *dev;
 	dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
 	filp->private_data = dev; /* for other methods */
 
@@ -55,63 +53,67 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                 loff_t *f_pos)
 {
 	ssize_t retval = 0;
-	struct aesd_dev *dev = filp->private_data;
-	size_t rtn_offset = 0;
-	size_t buf_index = 0;
-	size_t copy_bytes = 0;
-	size_t count_copy = count;
-	struct aesd_buffer_entry *buffer_entry = NULL;
-	unsigned long not_copied_bytes = 0;
-	int error = 0;
-	
 	PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
 	/**
 	 * TODO: handle read
 	 */
 	 
-	//lock 
-	error = mutex_lock_interruptible(&dev->rwmutex);
-	if(error != 0)
+	struct aesd_dev *dev = filp->private_data;
+	size_t rtn_offset = 0;
+	//size_t buf_index = 0;
+	size_t copy_bytes = 0;
+	//size_t count_copy = count;
+	struct aesd_buffer_entry *buffer_entry = NULL;
+	unsigned long not_copied_bytes = 0;
+	
+	int err = mutex_lock_interruptible(&dev->rwmutex);
+	if(err != 0)
 	{
-		return error;
+		return err;
 	}
 	
-	//Get buffer entry pointer from circular buffer as per given f_pos
-	do
-	{
+	//do
+	//{
 		buffer_entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->cbfifo, *f_pos, &rtn_offset);
 		if(buffer_entry == NULL)
-		{	//if no entry found then return 0
-			mutex_unlock(&dev->rwmutex);
+		{
+			mutex_unlock(&dev->rwlock);
 			return retval;
 		}
 		
-		//get number of bytes to be copied from offset till end of buffer
 		copy_bytes = buffer_entry->size - rtn_offset;
-		
-		//if number of bytes to be copied are greater than required bytes
 		if(copy_bytes  > count)
 			copy_bytes = count;
-		
-		//copy bytes from circular buffer to user buffer	
-		not_copied_bytes = copy_to_user(&buf[buf_index], &buffer_entry->buffptr[rtn_offset], copy_bytes);
+			
+		not_copied_bytes = copy_to_user(buf, &buffer_entry->buffptr[rtn_offset], copy_bytes);
 		//if(not_copied_bytes == 0 && (count_copy == copy_bytes))
 		//{
+		//	retval += copy_bytes;
 		//	break;
 		//}
-		
-		//update all pointers as per copied bytes
+		if(not_copied_bytes)
+		{
+			mutex_unlock(&dev->rwmutex);
+			return -EFAULT;
+		}
 		*f_pos += (copy_bytes - not_copied_bytes);
-		buf_index += (copy_bytes - not_copied_bytes);
+		//buf_index += (copy_bytes - not_copied_bytes);
 		retval += (copy_bytes - not_copied_bytes);
 		
-		//get bytes remaining to be copied
-		count_copy = count_copy - (copy_bytes - not_copied_bytes); 
+		//count_copy = count_copy - (copy_bytes - not_copied_bytes); 
 		
-	}while(count_copy);	//repeat till bytes = count are copied
+	//}while(count_copy);
 	
-	//unlock
-	mutex_unlock(&dev->rwmutex);
+	
+	err = mutex_unlock(&dev->rwmutex);
+	if(err != 0)
+	{
+		return err;
+	}
+	
+	if(retval == 0)
+		*f_pos = 0;
+	
 	return retval;
 }
 
@@ -119,65 +121,58 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
 	ssize_t retval = -ENOMEM;
-	struct aesd_dev *dev = filp->private_data;
-	size_t buff_index = 0;
-	unsigned long not_copied_bytes = 0;
-	int error = 0;
-	const char *free_entry = NULL;
-	
 	PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
 	/**
 	 * TODO: handle write
 	 */
 	 
-	//lock
-	error = mutex_lock_interruptible(&dev->rwmutex);
-	if(error != 0)
+	struct aesd_dev *dev = filp->private_data;
+	size_t byte_size = 0;
+	unsigned long not_copied_bytes = 0;
+	
+	int err = mutex_lock_interruptible(&dev->rwmutex);
+	if(err != 0)
 	{
-		return error;
+		return err;
 	}
 	
-	//check for size = 0 or buffptr = 0 -> new entry
-	//malloc or realloc space as per this condition
+	//check for size > count
+	//malloc or realloc space
+	
 	if(dev->current_entry.size == 0)
-	{	//new entry so malloc space
+	{
 		dev->current_entry.buffptr = kzalloc((sizeof(char) * count), GFP_KERNEL);
 		if(dev->current_entry.buffptr == NULL)
 		{
-			retval = -ENOMEM;
-			mutex_unlock(&dev->rwmutex);
-			return retval;
+			mutex_unlock(&dev->rwlock);
+			return -ENOMEM;
 		}
 	} 
 	else
-	{	//existing entry so realloc pointer to increase size
+	{
 		dev->current_entry.buffptr = krealloc(dev->current_entry.buffptr, (dev->current_entry.size + count), GFP_KERNEL);
 		if(dev->current_entry.buffptr == NULL)
 		{
-			retval = -ENOMEM;
-			mutex_unlock(&dev->rwmutex);
-			return retval;
+			mutex_unlock(&dev->rwlock);
+			return -ENOMEM;
 		}		
 	}
 	
-	//update buffer index and entry size as per above allocation	
-	buff_index = dev->current_entry.size;
-	dev->current_entry.size += count;
-	
 	//copy from user
-	not_copied_bytes = copy_from_user((void *)(dev->current_entry.buffptr + buff_index), buf, count);
+	not_copied_bytes = copy_from_user(dev->current_entry.buffptr, buf, count);
 	
+		
 	//update entry buffer size, retval of bytes
 	retval = count - not_copied_bytes;
-	buff_index = count - not_copied_bytes;
-	dev->current_entry.size -= not_copied_bytes;
+	byte_size = count - not_copied_bytes;
+	dev->current_entry.size += byte_size;
 	
 	
 	//check for newline found
-	if((strchr(dev->current_entry.buffptr, '\n')) != 0)
+	if((memchr(dev->current_entry.buffptr, '\n', dev->current_entry.size)) != 0)
 	{
 		//if yes, add new buffer entry in cbfifo
-		free_entry = aesd_circular_buffer_add_entry(&dev->cbfifo, &dev->current_entry);
+		const char *free_entry = aesd_circular_buffer_add_entry(&dev->cbfifo, &dev->current_entry);
 		if(free_entry)
 			kfree(free_entry);
 			
@@ -186,9 +181,13 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 		dev->current_entry.size = 0;
 	}	
 	
-	//unlock
-	mutex_unlock(&dev->rwmutex);
+	err = mutex_unlock(&dev->rwmutex);
+	if(err != 0)
+	{
+		return err;
+	}
 	
+		*f_pos = 0;
 	return retval;
 }
 
@@ -234,7 +233,6 @@ int aesd_init_module(void)
 	 * TODO: initialize the AESD specific portion of the device
 	 */
 	
-	//init mutex
 	mutex_init(&aesd_device.rwmutex);
 	
 	result = aesd_setup_cdev(&aesd_device);
@@ -255,12 +253,10 @@ void aesd_cleanup_module(void)
 	/**
 	 * TODO: cleanup AESD specific poritions here as necessary
 	 */
+	aesd_circular_buffer_delete(&aesd_device.cbfifo);
 	 
-	//free all allocated space
 	if(aesd_device.current_entry.buffptr)
 		kfree(aesd_device.current_entry.buffptr);
-		
-	aesd_circular_buffer_delete(&aesd_device.cbfifo);
 
 	unregister_chrdev_region(devno, 1);
 }

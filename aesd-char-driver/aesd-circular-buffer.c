@@ -9,9 +9,13 @@
  */
 
 #ifdef __KERNEL__
-#include <linux/string.h>
+#include <linux/string.h> 
+#include <linux/slab.h>
+#define FREE	kfree
 #else
 #include <string.h>
+#include <stdlib.h>
+#define FREE	free
 #endif
 
 #include "aesd-circular-buffer.h"
@@ -76,33 +80,49 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char * aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
     /**
     * TODO: implement per description 
     */
-    //Load new entry at in offset
-    buffer->entry[buffer->in_offs] = *add_entry;
-
-    //check in offset limit
-    buffer->in_offs++;
-    if(buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
-        buffer->in_offs = 0;
+    
+	const char *scrap_entry = NULL;
 
     //check for buffer full and out offset limit
     if(buffer->full)
     {
+    	//entry to be scraped
+    	scrap_entry = buffer->entry[buffer->out_offs].buffptr;
+    	
+    	//Load new entry at in offset
+		buffer->entry[buffer->in_offs] = *add_entry;
+
+		//check in offset limit
+		buffer->in_offs++;
+		if(buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+		    buffer->in_offs = 0;
+		    
         buffer->out_offs++;
         if(buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
             buffer->out_offs = 0;
     }
     else
     {
+    	//Load new entry at in offset
+		buffer->entry[buffer->in_offs] = *add_entry;
+
+		//check in offset limit
+		buffer->in_offs++;
+		if(buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+		    buffer->in_offs = 0;
+		    
         if(buffer->out_offs == buffer->in_offs)
             buffer->full = true;
         else
             buffer->full = false;
     }
+    
+    return scrap_entry;
 }
 
 /**
@@ -112,5 +132,30 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
 {
     memset(buffer,0,sizeof(struct aesd_circular_buffer));
 }
+
+/**
+* free the circular buffer described by @param buffer to delete each entry
+*/
+void aesd_circular_buffer_delete(struct aesd_circular_buffer *buffer)
+{
+	uint8_t index;
+	struct aesd_buffer_entry *entry;
+	AESD_CIRCULAR_BUFFER_FOREACH(entry, buffer, index) 
+	{
+		if(entry == NULL)
+			continue;
+			
+		FREE((void *)entry->buffptr);
+		/*
+		#ifdef __KERNEL__
+			kfree(entry->buffptr);
+		#else
+			free(entry->buffptr);
+		#endif
+		*/
+	}
+}
+
+
 
 
